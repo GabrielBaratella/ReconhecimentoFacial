@@ -1,10 +1,41 @@
 
 package Capture;
 
+import Util.ConectaBanco;
+import java.awt.Graphics;
+import org.bytedeco.javacpp.BytePointer;
 import org.bytedeco.javacpp.opencv_core;
+import org.bytedeco.javacpp.opencv_core.Mat;
+import org.bytedeco.javacpp.opencv_core.Rect;
+import org.bytedeco.javacpp.opencv_core.RectVector;
+import static org.bytedeco.javacpp.opencv_imgproc.COLOR_BGRA2GRAY;
+import org.bytedeco.javacpp.opencv_objdetect.CascadeClassifier;
+import org.bytedeco.javacpp.opencv_videoio.VideoCapture;
 
 public class Capture extends javax.swing.JFrame {
 
+    
+    private Capture.DaemonThread myThread = null;
+    
+    
+    
+    VideoCapture webSource = null;
+    
+    Mat cameraImage = new Mat();
+    
+    CascadeClassifier cascade = new CascadeClassifier("");
+    
+    BytePointer mem = new BytePointer();
+    
+    RectVector detectedFaces = new RectVector();
+    
+    String root;
+    int numSamples = 25, sample = -1;
+    
+    ConectaBanco conectaBanco = new ConectaBanco();
+    
+    
+    
     
     
     public Capture() {
@@ -23,7 +54,9 @@ public class Capture extends javax.swing.JFrame {
 
         jPanel1 = new javax.swing.JPanel();
         jLabel1 = new javax.swing.JLabel();
-        jLabel2 = new javax.swing.JLabel();
+        label_photo = new javax.swing.JLabel();
+        jLabel3 = new javax.swing.JLabel();
+        saveButton = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
         setTitle("Capiturando Fotos");
@@ -34,23 +67,50 @@ public class Capture extends javax.swing.JFrame {
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel1.setText("CAPTURAR");
 
+        jLabel3.setBackground(new java.awt.Color(153, 153, 255));
+        jLabel3.setFont(new java.awt.Font("sansserif", 0, 24)); // NOI18N
+        jLabel3.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel3.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        jLabel3.setText("00");
+        jLabel3.setOpaque(true);
+
+        saveButton.setBackground(new java.awt.Color(102, 255, 102));
+        saveButton.setForeground(new java.awt.Color(255, 255, 255));
+        saveButton.setText("jButton1");
+        saveButton.setContentAreaFilled(false);
+        saveButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                saveButtonActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, 571, Short.MAX_VALUE)
+            .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(saveButton, javax.swing.GroupLayout.DEFAULT_SIZE, 84, Short.MAX_VALUE)
+                    .addComponent(jLabel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGap(234, 234, 234))
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jLabel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addContainerGap())
+                .addComponent(label_photo, javax.swing.GroupLayout.PREFERRED_SIZE, 551, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 73, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
-                .addComponent(jLabel2, javax.swing.GroupLayout.PREFERRED_SIZE, 514, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(0, 134, Short.MAX_VALUE))
+                .addComponent(label_photo, javax.swing.GroupLayout.PREFERRED_SIZE, 442, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 39, Short.MAX_VALUE)
+                .addComponent(jLabel3, javax.swing.GroupLayout.PREFERRED_SIZE, 57, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
+                .addComponent(saveButton, javax.swing.GroupLayout.PREFERRED_SIZE, 39, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(53, 53, 53))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -67,6 +127,10 @@ public class Capture extends javax.swing.JFrame {
         pack();
         setLocationRelativeTo(null);
     }// </editor-fold>//GEN-END:initComponents
+
+    private void saveButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveButtonActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_saveButtonActionPerformed
 
     /**
      * @param args the command line arguments
@@ -97,10 +161,99 @@ public class Capture extends javax.swing.JFrame {
             }
         });
     }
+    
+    class DaemonThread implements Runnable {
+
+        protected volatile boolean runnable = false;
+
+        @Override
+        public void run() {
+            synchronized (this) {
+                while (runnable) {
+                    try {
+                        if (webSource.grab()) {
+                            webSource.retrieve(cameraImage);
+                            Graphics g = label_photo.getGraphics(); //mostra a imagem no jlabel
+
+                            Mat imageColor = new Mat(); //imagem colorida
+                            imageColor = cameraImage;
+
+                            Mat imageGray = new Mat(); //imagem pb
+                            cvtColor(imageColor, imageGray, COLOR_BGRA2GRAY);
+//                            flip(cameraImage, cameraImage, +1);
+
+                            RectVector detectedFaces = new RectVector(); //face detectada
+                            cascade.detectMultiScale(imageColor, detectedFaces, 1.1, 1, 1, new Size(150, 150), new Size(500, 500));
+
+                            for (int i = 0; i < detectedFaces.size(); i++) { //repetição pra encontrar as faces
+                                Rect dadosFace = detectedFaces.get(0);
+
+                                rectangle(imageColor, dadosFace, new Scalar(255, 255, 0, 2), 3, 0, 0);
+
+                                Mat face = new Mat(imageGray, dadosFace);
+                                opencv_imgproc.resize(face, face, new Size(160, 160));
+
+                                if (saveButton.getModel().isPressed()) { //quando apertar o botão saveButton
+                                    if (txt_first_name.getText().equals("") || txt_first_name.getText().equals(" ")) {
+                                        JOptionPane.showMessageDialog(null, "Campo vazio");
+                                    } else if (txt_first_name.getText().equals("") || txt_first_name.getText().equals(" ")) {
+                                        JOptionPane.showMessageDialog(null, "Campo vazio");
+                                    } else if (txt_last_name.getText().equals("") || txt_last_name.getText().equals(" ")) {
+                                        JOptionPane.showMessageDialog(null, "Campo vazio");
+                                    } else if (txt_office.getText().equals("") || txt_office.getText().equals(" ")) {
+                                        JOptionPane.showMessageDialog(null, "Campo vazio");
+                                    } else {
+                                        if (sample <= numSamples) {
+//                                        salva a imagem cortada [160,160]
+//                                        nome do arquivo: idpessoa + a contagem de fotos. ex: person.10(id).6(sexta foto).jpg
+                                            String cropped = "C:\\photos\\person." + txt_id_label.getText() + "." + sample + ".jpg";
+                                            imwrite(cropped, face);
+
+                                            //System.out.println("Foto " + amostra + " capturada\n");
+                                            counterLabel.setText(String.valueOf(sample) + "/25");
+                                            sample++;
+                                        }
+                                        if (sample > 25) {
+                                            new TrainLBPH().trainPhotos();//se a contagem for maior que 25, termina de tirar a foto, gera o arquivo
+                                            insertDatabase(); //insere os dados no banco
+
+                                            System.out.println("File Generated");
+                                            stopCamera(); // e fecha a camera
+                                        }
+
+                                    }
+                                }
+                            }
+
+                            imencode(".bmp", cameraImage, mem);
+                            Image im = ImageIO.read(new ByteArrayInputStream(mem.getStringBytes()));
+                            BufferedImage buff = (BufferedImage) im;
+                            try {
+                                if (g.drawImage(buff, 0, 0, 360, 390, 0, 0, buff.getWidth(), buff.getHeight(), null)) {
+                                    if (runnable == false) {
+                                        System.out.println("Salve a Foto");
+                                        this.wait();
+                                    }
+                                }
+                            } catch (Exception e) {
+                            }
+                        }
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+    
+    
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel jLabel1;
-    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
     private javax.swing.JPanel jPanel1;
+    private javax.swing.JLabel label_photo;
+    private javax.swing.JButton saveButton;
     // End of variables declaration//GEN-END:variables
 }
